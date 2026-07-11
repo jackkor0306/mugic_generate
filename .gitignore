@@ -1,3 +1,9 @@
 node_modules/
 data/
 *.log
+
+# 대용량 바이너리 (설치 스크립트로 복원): OpenUtau 앱, 보이스뱅크, .NET 런타임
+tools/OpenUtau/
+tools/downloads/
+tools/OuRender/bin/
+tools/OuRender/obj/

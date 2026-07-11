@@ -9,6 +9,10 @@ const { startJob, getRunningJob } = require('./lib/generator');
 const PORT = Number(process.env.PORT || 3789);
 const app = express();
 
+// 서버 재시작으로 끊긴 진행 중 작업 정리
+db.prepare(`UPDATE jobs SET status='error', error='서버가 재시작되어 작업이 중단되었습니다. 다시 시도해 주세요.',
+            finished_at = datetime('now','localtime') WHERE status='running'`).run();
+
 app.use(express.json({ limit: '80mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/vendor/abcjs', express.static(path.join(__dirname, 'node_modules', 'abcjs', 'dist')));
@@ -49,6 +53,8 @@ function getSongDetail(id) {
   const song = db.prepare('SELECT * FROM songs WHERE id = ?').get(id);
   if (!song) return null;
   song.parts = JSON.parse(song.parts || '[]');
+  song.vocal = vocal.vocalReady(id);
+  song.vocal_available = vocal.installed();
   song.attachments = db.prepare(`SELECT id, filename, kind, note, meta, created_at FROM attachments WHERE song_id = ? ORDER BY id`).all(id);
   song.versions = db.prepare(`SELECT id, kind, note, created_at FROM versions WHERE song_id = ? ORDER BY id DESC`).all(id);
   const job = db.prepare(`SELECT * FROM jobs WHERE song_id = ? ORDER BY id DESC LIMIT 1`).get(id);
@@ -176,6 +182,27 @@ app.post('/api/songs/:id/generate/:type', (req, res) => {
 app.get('/api/songs/:id/job', (req, res) => {
   const job = db.prepare(`SELECT * FROM jobs WHERE song_id = ? ORDER BY id DESC LIMIT 1`).get(Number(req.params.id));
   res.json(job || null);
+});
+
+// ---------------- 원클릭 AI 가창 렌더링 ----------------
+
+const vocal = require('./lib/vocal');
+
+app.post('/api/songs/:id/vocal', (req, res) => {
+  const song = getSongDetail(Number(req.params.id));
+  if (!song) return res.status(404).json({ error: '곡을 찾을 수 없습니다.' });
+  try {
+    res.json(vocal.startVocalJob(song));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.get('/api/songs/:id/vocal/file', (req, res) => {
+  const p = vocal.vocalWavPath(Number(req.params.id));
+  if (!require('fs').existsSync(p)) return res.status(404).json({ error: '가창 파일이 없습니다.' });
+  res.setHeader('Content-Type', 'audio/wav');
+  res.sendFile(p);
 });
 
 // ---------------- 가창(UST) 내보내기 ----------------

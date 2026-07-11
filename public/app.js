@@ -128,6 +128,11 @@ function renderNewForm() {
     <label class="field">참고 가사 / 꼭 들어갈 키워드 <span style="font-weight:400;color:#999">(선택)</span>
       <textarea id="f-lyrics-input" rows="4" placeholder="직접 쓴 가사 초안이나 꼭 넣고 싶은 문구·키워드가 있으면 적어주세요."></textarea>
     </label>
+    <label class="field">📎 참고 파일 첨부 <span style="font-weight:400;color:#999">(선택, 여러 개 가능 — 기존 음악·악보를 바탕으로 만들 때)</span>
+      <input type="file" id="f-att" multiple accept=".abc,.txt,.xml,.musicxml,.mid,.midi,.png,.jpg,.jpeg,.webp,.gif,.mp3,.wav,.ogg,.m4a,.flac">
+      <input type="text" id="f-att-note" placeholder="파일 활용 메모 (예: 이 곡의 후렴 멜로디를 참고)" style="margin-top:8px">
+      <p class="hint">첨부 파일 업로드가 모두 끝난 뒤에 AI 작사가 시작됩니다.</p>
+    </label>
     <label style="display:flex;align-items:center;gap:8px;font-size:14px;margin-bottom:6px">
       <input type="checkbox" id="f-auto" checked> 만들자마자 바로 AI 작사 시작
     </label>
@@ -148,14 +153,30 @@ function renderNewForm() {
     const btn = document.getElementById('btn-create');
     btn.disabled = true; btn.textContent = '만드는 중...';
     try {
+      // 1) 곡 생성 (작사는 첨부 업로드가 끝난 뒤 시작)
       const r = await api('POST', '/api/songs', {
         title: document.getElementById('f-title').value,
         direction,
         mood: document.getElementById('f-mood').value,
         instruments: instruments.join(', '),
         lyricsInput: document.getElementById('f-lyrics-input').value,
-        autoLyrics: document.getElementById('f-auto').checked,
+        autoLyrics: false,
       });
+      // 2) 첨부 파일 업로드
+      const files = [...(document.getElementById('f-att').files || [])];
+      const attNote = document.getElementById('f-att-note').value;
+      for (let i = 0; i < files.length; i++) {
+        btn.textContent = `참고 파일 업로드 중... (${i + 1}/${files.length})`;
+        try {
+          await uploadAttachment(r.id, files[i], attNote);
+        } catch (e) {
+          toast(`"${files[i].name}" 첨부 실패: ${e.message}`, true);
+        }
+      }
+      // 3) 업로드 완료 후 AI 작사 시작
+      if (document.getElementById('f-auto').checked) {
+        try { await api('POST', `/api/songs/${r.id}/generate/lyrics`, {}); } catch (e) {}
+      }
       toast('곡이 생성되었습니다!');
       location.hash = '#/song/' + r.id;
     } catch (e) {
@@ -187,10 +208,12 @@ async function renderDetail(id) {
   </div>`;
 
   if (running) {
+    const jobLabel = { lyrics: 'AI가 작사 중입니다...', score: 'AI가 작곡·편곡 중입니다...', vocal: 'AI 가수가 노래하는 중입니다...' };
     html += `<div class="job-banner"><div class="spinner"></div>
-      <div><b>${song.last_job.type === 'lyrics' ? 'AI가 작사 중입니다...' : 'AI가 작곡·편곡 중입니다...'}</b>
+      <div><b>${jobLabel[song.last_job.type] || '작업 중...'}</b>
       <span id="job-elapsed"></span><br>
-      <span style="font-size:12px">보통 1~5분 정도 걸립니다. 완료되면 화면이 자동으로 갱신됩니다.</span></div></div>`;
+      <span id="job-progress" style="font-size:12px">${esc(song.last_job.progress || '')}</span><br>
+      <span style="font-size:12px;color:#9a7b20">작사는 1분 내외, 작곡은 곡 규모에 따라 5~20분 정도 걸립니다. 완료되면 화면이 자동으로 갱신됩니다.</span></div></div>`;
   } else if (jobErr) {
     html += `<div class="job-banner error">⚠️ 마지막 작업이 실패했습니다: ${esc(song.last_job.error)}<br>
       <span style="font-size:12px">아래 버튼으로 다시 시도해 주세요.</span></div>`;
@@ -244,7 +267,7 @@ async function renderDetail(id) {
       }).join('') || '<div class="hint" style="padding:4px 0 10px">첨부된 자료가 없습니다. 악보(.abc .xml .mid), 악보 이미지(.png .jpg), 오디오(.mp3 .wav) 파일을 첨부할 수 있습니다.</div>'}
     </div>
     <div class="btnrow" style="margin-top:12px">
-      <input type="file" id="att-file" accept=".abc,.txt,.xml,.musicxml,.mid,.midi,.png,.jpg,.jpeg,.webp,.gif,.mp3,.wav,.ogg,.m4a,.flac" style="flex:1;min-width:200px">
+      <input type="file" id="att-file" multiple accept=".abc,.txt,.xml,.musicxml,.mid,.midi,.png,.jpg,.jpeg,.webp,.gif,.mp3,.wav,.ogg,.m4a,.flac" style="flex:1;min-width:200px">
       <input type="text" id="att-note" placeholder="활용 메모 (예: 이 곡의 후렴 멜로디를 참고해서 개선)" style="flex:2;min-width:220px">
       <button id="btn-att-up">📎 첨부</button>
     </div>
@@ -317,9 +340,23 @@ async function renderDetail(id) {
         <span class="hint">음원 생성에는 인터넷 연결이 필요합니다 (악기 사운드폰트 로딩).</span>
       </div>
       <div style="margin-top:14px;padding:12px 14px;background:#f4f8f4;border-radius:8px">
-        <b style="font-size:14px">🎤 실제 목소리 가창 (OpenUTAU 연동)</b>
-        <p class="hint" style="margin:6px 0 8px">내장 신디사이저는 보컬을 허밍 음색으로만 연주합니다. 실제로 가사를 부르는 음원을 만들려면 무료 가창 합성 프로그램 <b>OpenUTAU</b>(+ 한국어 DiffSinger 보이스뱅크)를 사용하세요. 아래 버튼으로 보컬 악보+가사를 UST 파일로 내보낸 뒤, OpenUTAU에서 열어 가수를 지정하고 WAV로 내보내면 됩니다. 반주는 위의 「보컬 제외(MR)」로 만들어 합치면 완성입니다. (자세한 방법은 README 참고)</p>
-        <button class="secondary" id="btn-ust">🎤 보컬 UST 내보내기 (OpenUTAU용)</button>
+        <b style="font-size:14px">🎤 실제 목소리 가창 (AI 가수)</b>
+        <p class="hint" style="margin:6px 0 8px">AI 가수(한국어 지원)가 가사를 실제로 발음하며 노래합니다. 버튼 한 번이면 됩니다 — CPU 렌더링이라 몇 분 걸릴 수 있어요.</p>
+        <div class="btnrow">
+          <button id="btn-vocal" ${running || !song.vocal_available ? 'disabled' : ''}>🎤 AI 가창 렌더링 ${song.vocal ? '다시 ' : ''}시작</button>
+          <button class="secondary" id="btn-ust">UST 내보내기 (OpenUTAU 수동 편집용)</button>
+          ${!song.vocal_available ? '<span class="hint">가창 렌더러가 설치되어 있지 않습니다.</span>' : ''}
+        </div>
+        ${song.vocal ? `
+        <div style="margin-top:10px">
+          <div class="hint" style="margin-bottom:4px">✅ 렌더링된 AI 보컬 (${esc(song.vocal.mtime.slice(0, 16).replace('T', ' '))})</div>
+          <audio controls src="/api/songs/${song.id}/vocal/file?ts=${encodeURIComponent(song.vocal.mtime)}" style="width:100%;max-width:480px;height:36px"></audio>
+          <div class="btnrow" style="margin-top:8px">
+            <button id="btn-fullmix">🎬 완성곡 WAV 만들기 (AI 보컬 + 반주 믹스)</button>
+            <button class="secondary" id="btn-vocal-dl">보컬만 WAV 다운로드</button>
+            <label style="font-size:13px;display:flex;align-items:center;gap:6px">보컬 볼륨 <input type="range" id="opt-vocal-gain" min="50" max="180" value="110"></label>
+          </div>
+        </div>` : ''}
       </div>
     </div>`;
   }
@@ -382,31 +419,22 @@ async function renderDetail(id) {
 
   // 첨부 업로드/삭제
   document.getElementById('btn-att-up').onclick = async () => {
-    const fileInput = document.getElementById('att-file');
-    const file = fileInput.files && fileInput.files[0];
-    if (!file) { toast('첨부할 파일을 선택해 주세요.', true); return; }
-    if (file.size > 40 * 1024 * 1024) { toast('파일이 너무 큽니다 (최대 40MB).', true); return; }
+    const files = [...(document.getElementById('att-file').files || [])];
+    if (!files.length) { toast('첨부할 파일을 선택해 주세요.', true); return; }
     const btn = document.getElementById('btn-att-up');
-    btn.disabled = true; btn.textContent = '업로드 중...';
-    try {
-      let meta = {};
-      if (/\.(mp3|wav|ogg|m4a|flac)$/i.test(file.name)) {
-        btn.textContent = '오디오 분석 중...';
-        try { meta = await analyzeAudio(await file.arrayBuffer()); } catch (e) { meta = {}; }
+    btn.disabled = true;
+    let ok = 0;
+    for (let i = 0; i < files.length; i++) {
+      btn.textContent = `업로드 중... (${i + 1}/${files.length})`;
+      try {
+        await uploadAttachment(id, files[i], document.getElementById('att-note').value);
+        ok++;
+      } catch (e) {
+        toast(`"${files[i].name}" 첨부 실패: ${e.message}`, true);
       }
-      const dataBase64 = await fileToBase64(file);
-      await api('POST', `/api/songs/${id}/attachments`, {
-        filename: file.name,
-        dataBase64,
-        note: document.getElementById('att-note').value,
-        meta,
-      });
-      toast('첨부되었습니다. 다음 생성부터 AI가 참고합니다.');
-      renderDetail(id);
-    } catch (e) {
-      toast(e.message, true);
-      btn.disabled = false; btn.textContent = '📎 첨부';
     }
+    if (ok) toast(`${ok}개 파일이 첨부되었습니다. 다음 생성부터 AI가 참고합니다.`);
+    renderDetail(id);
   };
   document.querySelectorAll('[data-att-del]').forEach(btn => {
     btn.onclick = async () => {
@@ -504,6 +532,10 @@ async function renderDetail(id) {
       if (el) el.textContent = ` (${Math.round((Date.now() - started) / 1000)}초 경과)`;
       try {
         const job = await api('GET', `/api/songs/${id}/job`);
+        if (job && job.status === 'running') {
+          const p = document.getElementById('job-progress');
+          if (p && job.progress) p.textContent = job.progress;
+        }
         if (job && job.status !== 'running') {
           stopPolling();
           toast(job.status === 'done' ? '✅ 작업이 완료되었습니다!' : '작업이 실패했습니다.', job.status !== 'done');
@@ -555,7 +587,8 @@ function setupAudioWidget(visualObj, song) {
   currentSynthControl.load('#audio-widget', null, {
     displayLoop: true, displayRestart: true, displayPlay: true, displayProgress: true, displayWarp: true,
   });
-  currentSynthControl.setTune(visualObj, false, { chordsOff: false }).catch(e => {
+  // chordsOff: 코드 심볼 자동 반주를 끄고 악보에 적힌 보이스만 연주 (겹치면 소리가 지저분해짐)
+  currentSynthControl.setTune(visualObj, false, { chordsOff: true }).catch(e => {
     document.getElementById('audio-widget').innerHTML = `<div class="warnings">오디오 준비 실패: ${esc(e.message || e)}</div>`;
   });
 
@@ -566,6 +599,22 @@ function setupAudioWidget(visualObj, song) {
   document.getElementById('btn-ust').onclick = () => {
     window.location.href = `/api/songs/${song.id}/ust`;
   };
+  const vocalBtn = document.getElementById('btn-vocal');
+  if (vocalBtn) vocalBtn.onclick = async () => {
+    if (song.vocal && !confirm('기존 AI 보컬을 새로 렌더링할까요?')) return;
+    try {
+      await api('POST', `/api/songs/${song.id}/vocal`, {});
+      toast('AI 가창 렌더링을 시작했습니다. 몇 분 정도 걸립니다...');
+      renderDetail(song.id);
+    } catch (e) { toast(e.message, true); }
+  };
+  const vocalDl = document.getElementById('btn-vocal-dl');
+  if (vocalDl) vocalDl.onclick = async () => {
+    const resp = await fetch(`/api/songs/${song.id}/vocal/file`);
+    downloadBlob(await resp.blob(), sanitize(song.title) + '_AI보컬.wav');
+  };
+  const fullmixBtn = document.getElementById('btn-fullmix');
+  if (fullmixBtn) fullmixBtn.onclick = () => makeFullMix(song, 'btn-fullmix');
   document.getElementById('btn-midi').onclick = () => {
     try {
       let midi = ABCJS.synth.getMidiFile(song.abc, { midiOutputType: 'binary' });
@@ -581,17 +630,9 @@ async function makeWav(abc, name, btnId, extra) {
   btn.disabled = true;
   btn.textContent = '🎧 음원 생성 중... (수십 초 걸릴 수 있어요)';
   try {
-    const tmp = document.createElement('div');
-    tmp.style.cssText = 'position:absolute;left:-9999px;width:800px';
-    document.body.appendChild(tmp);
-    const visual = ABCJS.renderAbc(tmp, abc, {})[0];
-    const synth = new ABCJS.synth.CreateSynth();
-    const synthOptions = {};
+    const synthOptions = { chordsOff: true };
     if (extra && extra.mr) synthOptions.voicesOff = [0]; // 첫 번째 보이스(보컬) 음소거
-    await synth.init({ visualObj: visual, options: synthOptions });
-    await synth.prime();
-    let buffer = synth.getAudioBuffer();
-    tmp.remove();
+    let buffer = await getSynthBuffer(abc, synthOptions);
     if (!buffer) throw new Error('오디오 버퍼를 만들지 못했습니다.');
 
     const useFx = document.getElementById('opt-fx') ? document.getElementById('opt-fx').checked : true;
@@ -604,6 +645,79 @@ async function makeWav(abc, name, btnId, extra) {
   } catch (e) {
     console.error(e);
     toast('음원 생성 실패: ' + (e.message || e) + ' (인터넷 연결을 확인해 주세요)', true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+
+/* ABC 악보 → 신스 AudioBuffer (다운로드 없이) */
+async function getSynthBuffer(abc, synthOptions) {
+  const tmp = document.createElement('div');
+  tmp.style.cssText = 'position:absolute;left:-9999px;width:800px';
+  document.body.appendChild(tmp);
+  try {
+    const visual = ABCJS.renderAbc(tmp, abc, {})[0];
+    const synth = new ABCJS.synth.CreateSynth();
+    await synth.init({ visualObj: visual, options: synthOptions || {} });
+    await synth.prime();
+    return synth.getAudioBuffer();
+  } finally {
+    tmp.remove();
+  }
+}
+
+/* AI 보컬 WAV + 반주(MR) 신스를 믹스하여 완성곡 WAV 생성 */
+async function makeFullMix(song, btnId) {
+  const btn = document.getElementById(btnId);
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '🎬 완성곡 믹싱 중... (수십 초)';
+  try {
+    const mrBuf = await getSynthBuffer(song.abc, { chordsOff: true, voicesOff: [0] });
+    const resp = await fetch(`/api/songs/${song.id}/vocal/file`);
+    if (!resp.ok) throw new Error('AI 보컬 파일을 불러오지 못했습니다.');
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    let vocalBuf;
+    try { vocalBuf = await ac.decodeAudioData(await resp.arrayBuffer()); }
+    finally { ac.close().catch(() => {}); }
+
+    const vocalGain = document.getElementById('opt-vocal-gain') ? Number(document.getElementById('opt-vocal-gain').value) / 100 : 1.1;
+    const reverb = document.getElementById('opt-reverb') ? Number(document.getElementById('opt-reverb').value) / 100 : 0.25;
+    const gain = document.getElementById('opt-gain') ? Number(document.getElementById('opt-gain').value) / 100 : 1;
+
+    const rate = 44100;
+    const dur = Math.max(mrBuf.duration, vocalBuf.duration) + 2.5;
+    const ctx = new OfflineAudioContext(2, Math.ceil(dur * rate), rate);
+
+    const mkSrc = (buf, g) => {
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      const gn = ctx.createGain(); gn.gain.value = g;
+      src.connect(gn); src.start();
+      return gn;
+    };
+    const sum = ctx.createGain();
+    mkSrc(mrBuf, 0.85).connect(sum);
+    mkSrc(vocalBuf, vocalGain).connect(sum);
+
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -16; comp.knee.value = 18; comp.ratio.value = 3.5;
+    comp.attack.value = 0.008; comp.release.value = 0.25;
+    const dry = ctx.createGain(); dry.gain.value = 1 - reverb * 0.4;
+    const wet = ctx.createGain(); wet.gain.value = reverb;
+    const conv = ctx.createConvolver(); conv.buffer = makeImpulse(ctx, 2.0, 2.6);
+    const master = ctx.createGain(); master.gain.value = gain * 0.95;
+    sum.connect(comp);
+    comp.connect(dry); dry.connect(master);
+    comp.connect(conv); conv.connect(wet); wet.connect(master);
+    master.connect(ctx.destination);
+
+    const rendered = await ctx.startRendering();
+    downloadBlob(encodeWav(rendered), sanitize(song.title) + '_완성곡.wav');
+    toast('🎉 완성곡 WAV가 다운로드되었습니다!');
+  } catch (e) {
+    console.error(e);
+    toast('완성곡 생성 실패: ' + (e.message || e), true);
   } finally {
     btn.disabled = false;
     btn.textContent = orig;
@@ -685,6 +799,16 @@ function encodeWav(buffer) {
 }
 
 // ---------------- 첨부 파일 유틸 ----------------
+
+async function uploadAttachment(songId, file, note) {
+  if (file.size > 40 * 1024 * 1024) throw new Error('파일이 너무 큽니다 (최대 40MB).');
+  let meta = {};
+  if (/\.(mp3|wav|ogg|m4a|flac)$/i.test(file.name)) {
+    try { meta = await analyzeAudio(await file.arrayBuffer()); } catch (e) { meta = {}; }
+  }
+  const dataBase64 = await fileToBase64(file);
+  return api('POST', `/api/songs/${songId}/attachments`, { filename: file.name, dataBase64, note: note || '', meta });
+}
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
