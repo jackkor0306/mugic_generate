@@ -1,0 +1,14 @@
+{
+  "name": "music-studio",
+  "version": "1.0.0",
+  "description": "로컬 AI 음악 작곡/작사 스튜디오 (Claude Opus 4.8 기반)",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "abcjs": "^6.4.4",
+    "express": "^4.21.2"
+  }
+}

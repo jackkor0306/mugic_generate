@@ -1,0 +1,172 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo", sans-serif;
+  background: #f2f4f8;
+  color: #1f2430;
+}
+#topbar {
+  background: linear-gradient(90deg, #3b2f63, #5b4a9e);
+  color: #fff;
+  padding: 14px 28px;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.15);
+}
+#topbar h1 { margin: 0; font-size: 20px; cursor: pointer; }
+#topbar .sub { font-size: 12px; opacity: .8; }
+main { max-width: 1100px; margin: 24px auto 80px; padding: 0 20px; }
+
+.card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin-bottom: 18px;
+  box-shadow: 0 1px 4px rgba(20,20,50,.08);
+}
+.card h2 { margin: 0 0 14px; font-size: 17px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.card h2 .spacer { flex: 1; }
+
+button {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background: #5b4a9e;
+  color: #fff;
+  cursor: pointer;
+  transition: background .15s;
+}
+button:hover { background: #47387e; }
+button:disabled { background: #b8b3cc; cursor: not-allowed; }
+button.secondary { background: #e8e6f2; color: #3b2f63; }
+button.secondary:hover { background: #d8d4ea; }
+button.danger { background: #fce8e8; color: #b02a2a; }
+button.danger:hover { background: #f5d0d0; }
+button.big { font-size: 16px; padding: 12px 26px; }
+
+input[type=text], textarea, select {
+  font-family: inherit;
+  font-size: 14px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid #d5d8e2;
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+input:focus, textarea:focus { outline: 2px solid #8f7fd0; border-color: transparent; }
+textarea { resize: vertical; }
+textarea.mono { font-family: Consolas, monospace; font-size: 13px; white-space: pre; }
+label.field { display: block; margin-bottom: 12px; font-size: 13px; font-weight: 600; color: #444a5c; }
+label.field > * { margin-top: 5px; font-weight: 400; }
+.hint { font-size: 12px; color: #7a8095; margin: 4px 0 0; }
+
+.row { display: flex; gap: 16px; flex-wrap: wrap; }
+.row > * { flex: 1; min-width: 220px; }
+.btnrow { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+
+/* 목록 */
+.list-head { display: flex; align-items: center; margin-bottom: 16px; }
+.list-head h2 { flex: 1; margin: 0; }
+.song-item {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(20,20,50,.07);
+  transition: transform .08s, box-shadow .08s;
+}
+.song-item:hover { transform: translateY(-1px); box-shadow: 0 3px 10px rgba(20,20,50,.12); }
+.song-item .num {
+  background: #efeaff; color: #5b4a9e;
+  border-radius: 8px; padding: 8px 12px;
+  font-weight: 700; font-size: 15px; white-space: nowrap;
+}
+.song-item .info { flex: 1; min-width: 0; }
+.song-item .title { font-weight: 700; font-size: 16px; margin-bottom: 3px; }
+.song-item .meta { font-size: 12px; color: #7a8095; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.badge {
+  display: inline-block; font-size: 11px; padding: 3px 9px;
+  border-radius: 20px; margin-left: 6px; vertical-align: 1px;
+}
+.badge.draft { background: #eef0f5; color: #7a8095; }
+.badge.lyrics { background: #e3f2e8; color: #1e7a41; }
+.badge.score { background: #e3ecfb; color: #2456a8; }
+.badge.working { background: #fff3d6; color: #9a6c00; }
+.empty { text-align: center; color: #8a90a5; padding: 50px 0; }
+
+/* 진행 중 배너 */
+.job-banner {
+  background: #fff8e6;
+  border: 1px solid #f0dfa8;
+  color: #7a5b00;
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-bottom: 18px;
+  display: flex; align-items: center; gap: 12px;
+}
+.job-banner.error { background: #fdecec; border-color: #efc0c0; color: #a02525; }
+.spinner {
+  width: 18px; height: 18px;
+  border: 3px solid #e8d79a;
+  border-top-color: #b58900;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 상세 */
+.detail-head { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+.detail-head input { font-size: 20px; font-weight: 700; flex: 1; min-width: 240px; }
+pre.lyrics-view { white-space: pre-wrap; font-family: inherit; line-height: 1.9; margin: 0; }
+.score-box { overflow-x: auto; border: 1px solid #eceef4; border-radius: 8px; padding: 10px; background: #fff; }
+.warnings { background: #fff3f0; color: #a04326; font-size: 12px; padding: 8px 12px; border-radius: 8px; margin-top: 8px; white-space: pre-wrap; }
+.notes { background: #f4f1ff; color: #4a3d85; font-size: 13px; padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; }
+
+/* 파트 탭 */
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.tabs button { background: #eef0f5; color: #444a5c; padding: 7px 14px; }
+.tabs button.active { background: #5b4a9e; color: #fff; }
+
+/* 악기 체크박스 */
+.inst-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.inst-grid label {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: #f2f0fa; padding: 7px 12px; border-radius: 20px;
+  font-size: 13px; cursor: pointer; font-weight: 400;
+}
+.inst-grid label:has(input:checked) { background: #5b4a9e; color: #fff; }
+
+/* 오디오 */
+.audio-opts { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; margin: 12px 0; font-size: 13px; }
+.audio-opts label { display: flex; align-items: center; gap: 8px; }
+input[type=range] { width: 140px; }
+
+/* 버전 */
+.ver-item { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 1px solid #f0f1f6; font-size: 13px; }
+.ver-item:last-child { border-bottom: none; }
+.ver-item .k { font-weight: 700; width: 46px; }
+.ver-item .k.lyrics { color: #1e7a41; }
+.ver-item .k.score { color: #2456a8; }
+.ver-item .note { flex: 1; color: #667; }
+.ver-item .date { color: #99a; font-size: 12px; }
+.ver-item button { padding: 4px 12px; font-size: 12px; }
+
+/* 토스트 */
+#toast {
+  position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%);
+  background: #2a2f3e; color: #fff; padding: 12px 22px; border-radius: 10px;
+  font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .25s;
+  z-index: 100; max-width: 80vw;
+}
+#toast.show { opacity: 1; }
+#toast.err { background: #a02525; }
+
+.abcjs-inline-audio { border-radius: 8px; }
